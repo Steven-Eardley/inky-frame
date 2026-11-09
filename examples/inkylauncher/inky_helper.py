@@ -67,9 +67,9 @@ def sleep(t):
     rtc.set_timer(t, ttp=rtc.TIMER_TICK_1_OVER_60HZ)
     rtc.enable_timer_interrupt(True)
 
-    # Set the HOLD VSYS pin to an input
+    # Turn off the HOLD VSYS pin
     # this allows the device to go into sleep mode when on battery power.
-    hold_vsys_en_pin.init(Pin.IN)
+    hold_vsys_en_pin.value(0)
 
     # On USB power we're still running, so wait out the interval here, watching for
     # A + E being held to return to the launcher. (On battery, pressing A + E wakes
