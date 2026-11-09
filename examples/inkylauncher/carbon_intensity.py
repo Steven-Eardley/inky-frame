@@ -67,7 +67,7 @@ def update():
         datetime_to = data["to"].split("T")
         datetime_from = data["from"].split("T")
         region = j["data"][0]["shortname"]  # set last, so a partial parse doesn't count as success
-    except Exception as e:  # network errors, bad JSON, API errors
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as e:  # network errors, bad JSON, unexpected response
         print("Carbon Intensity update failed:", e)
 
 

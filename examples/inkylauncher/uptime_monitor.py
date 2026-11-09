@@ -187,7 +187,7 @@ def update():
         monitors = mons
         updated_at = now
         error = None
-    except Exception as e:  # network errors, bad JSON, API errors
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as e:  # network errors, bad JSON, unexpected response
         print("Uptime update failed:", e)
         error = "Unable to reach UptimeRobot"
 

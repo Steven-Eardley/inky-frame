@@ -62,7 +62,7 @@ def update():
         if "title" not in j:
             print("APOD API error:", j)
         gc.collect()
-    except Exception as e:  # network errors, bad JSON, etc. - the image is fetched separately
+    except (OSError, ValueError, AttributeError) as e:  # network errors, bad JSON - the image is fetched separately
         print(e)
         apod_title = "Image Title Unavailable"
 

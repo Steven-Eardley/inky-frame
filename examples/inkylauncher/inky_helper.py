@@ -173,7 +173,7 @@ def read_vsys():
             total += adc.read_u16()
             time.sleep_ms(1)
         vsys_voltage = total / 16 * 3.3 / 65535 * 3
-    except Exception as e:
+    except (OSError, ValueError) as e:
         print("Unable to read VSYS:", e)
 
 
@@ -182,7 +182,7 @@ def check_usb():
     global on_usb
     try:
         on_usb = bool(Pin("WL_GPIO2", Pin.IN).value())
-    except Exception as e:
+    except (OSError, ValueError) as e:  # ValueError if this board has no WL_GPIO2
         print("Unable to check USB power:", e)
 
 

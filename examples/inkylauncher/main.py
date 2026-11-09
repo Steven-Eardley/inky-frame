@@ -54,7 +54,7 @@ def wait_for_choice():
     }
     while True:
         # Wait for any button
-        pressed = set(k for k, b in buttons.items() if b.raw())
+        pressed = {k for k, b in buttons.items() if b.raw()}
         if not pressed:
             time.sleep(0.02)
             continue
@@ -65,7 +65,7 @@ def wait_for_choice():
             pressed.update(k for k, b in buttons.items() if b.raw())
             time.sleep(0.02)
 
-        for label, app, combo in APPS:
+        for _label, app, combo in APPS:
             if pressed == set(combo):
                 for k in combo:
                     buttons[k].led_on()
@@ -95,7 +95,7 @@ def launcher():
     row_h = step - 10
     top = title_h + (space - (len(APPS) * step - 10)) // 2
     grey = graphics.create_pen(220, 220, 220)
-    for i, (label, app, combo) in enumerate(APPS):
+    for i, (label, _app, _combo) in enumerate(APPS):
         y = top + i * step
         bar_w = WIDTH - (100 + 50 * i)
         graphics.set_pen(GREEN if i % 2 == 0 else BLUE)
