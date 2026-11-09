@@ -105,7 +105,17 @@ def launcher_requested():
 def wait_for_launcher_hold(seconds):
     deadline = time.ticks_add(time.ticks_ms(), int(seconds * 1000))
     held_since = None
+    # Apps can handle presses of B, C and D by defining on_button(name)
+    other = (("b", inky_frame.button_b), ("c", inky_frame.button_c), ("d", inky_frame.button_d))
+    was_down = {}
     while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        for name, button in other:
+            down = button.raw()
+            if down and not was_down.get(name):
+                handler = getattr(app, "on_button", None)
+                if handler:
+                    handler(name)
+            was_down[name] = down
         if inky_frame.button_a.raw() and inky_frame.button_e.raw():
             if held_since is None:
                 held_since = time.ticks_ms()
@@ -127,15 +137,15 @@ LAUNCHER_HINT = "Hold A + E to return to the Launcher"
 
 # Draws the "return to launcher" button reference in a bar along the bottom of the screen.
 # Pass bg=None to draw the text without a background bar.
-def draw_launcher_hint(graphics, width, height, fg, bg=None, bar_height=20):
+def draw_launcher_hint(graphics, width, height, fg, bg=None, bar_height=20, text=LAUNCHER_HINT):
     if bg is not None:
         graphics.set_pen(bg)
         graphics.rectangle(0, height - bar_height, width, bar_height)
     graphics.set_pen(fg)
     graphics.set_font("bitmap8")
-    text_w = graphics.measure_text(LAUNCHER_HINT, 2)
+    text_w = graphics.measure_text(text, 2)
     # bitmap8 at scale 2 is 16px tall; centre it vertically in the bar
-    graphics.text(LAUNCHER_HINT, (width - text_w) // 2, height - bar_height + (bar_height - 16) // 2, width, 2)
+    graphics.text(text, (width - text_w) // 2, height - bar_height + (bar_height - 16) // 2, width, 2)
 
 
 # Turns off the button LEDs

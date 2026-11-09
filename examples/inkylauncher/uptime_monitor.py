@@ -5,6 +5,9 @@ Monitors tagged "inky-full" in UptimeRobot get a row with a 24 hour bar (one seg
 per hour) and their 24 hour uptime. Monitors tagged only "inky-alert" are shown in a
 compact strip that just says whether they're up right now.
 
+Press C to cycle through the colour themes: green/red, then blue/yellow and
+green/yellow (colour-blind friendly).
+
 Create a read-only API key in UptimeRobot (Integrations > API) and add it to secrets.py:
 UPTIMEROBOT_API_KEY = "..."
 """
@@ -12,10 +15,11 @@ UPTIMEROBOT_API_KEY = "..."
 import gc
 import time
 
+import inky_frame
 import inky_helper as ih
 import ntptime
 import urequests
-from inky_frame import BLACK, GREEN, RED, WHITE
+from inky_frame import BLACK, BLUE, GREEN, RED, WHITE, YELLOW
 
 try:
     from secrets import UPTIMEROBOT_API_KEY
@@ -44,9 +48,56 @@ FOOTER_H = 22
 HEADER_H = 40
 ALERT_H = 28
 
+# Colour themes. "bad_text" is the colour for text about something that's down, and
+# "highlight" (if set) is drawn behind that text, since yellow text on white is unreadable.
+# "outline" draws a black border round "bad" bar segments, so yellow stands out from white.
+THEMES = {
+    "standard": {"good": GREEN, "bad": RED, "bad_text": RED, "highlight": None, "outline": False},
+    "blue-yellow": {"good": BLUE, "bad": YELLOW, "bad_text": BLACK, "highlight": YELLOW, "outline": True},
+    "green-yellow": {"good": GREEN, "bad": YELLOW, "bad_text": BLACK, "highlight": YELLOW, "outline": True},
+}
+THEME_ORDER = ("standard", "blue-yellow", "green-yellow")
+THEME_BUTTON = "c"
+THEME_FILE = "/uptime_theme.txt"
+
 monitors = None  # list of dicts, see update(); None until the first successful update
 updated_at = None
 error = None
+checked_wake_button = False
+
+
+def load_theme():
+    try:
+        with open(THEME_FILE) as f:
+            name = f.read().strip()
+        if name in THEMES:
+            return name
+    except OSError:
+        pass
+    return THEME_ORDER[0]
+
+
+theme_name = load_theme()
+
+
+def next_theme():
+    global theme_name
+    theme_name = THEME_ORDER[(THEME_ORDER.index(theme_name) + 1) % len(THEME_ORDER)]
+    try:
+        with open(THEME_FILE, "w") as f:
+            f.write(theme_name)
+    except OSError as e:
+        print("Unable to save theme:", e)
+
+
+def on_button(name):
+    # Called by inky_helper while waiting between updates on USB power
+    if name == THEME_BUTTON:
+        next_theme()
+        if monitors is not None:
+            ih.led_warn.on()
+            draw()
+            ih.led_warn.off()
 
 
 def iso_to_epoch(s):
@@ -71,7 +122,13 @@ def api_get(path):
 
 
 def update():
-    global monitors, updated_at, error
+    global monitors, updated_at, error, checked_wake_button
+
+    # On battery, pressing C wakes the board: switch theme as well as refreshing
+    if not checked_wake_button:
+        checked_wake_button = True
+        if inky_frame.button_c.raw():
+            next_theme()
 
     if not UPTIMEROBOT_API_KEY:
         error = "Add UPTIMEROBOT_API_KEY to secrets.py"
@@ -160,12 +217,29 @@ def fit_text(text, max_w, scale):
     return text + ".."
 
 
-def draw_dot(x, y, r, status):
-    graphics.set_pen(RED if status in DOWN_STATUSES else (GREEN if status == "UP" else BLACK))
+def status_text(text, x, y, down, theme):
+    # Text about a monitor: black normally, or the theme's "bad" style when it's down
+    if down and theme["highlight"] is not None:
+        graphics.set_pen(theme["highlight"])
+        graphics.rectangle(x - 3, y - 2, graphics.measure_text(text, 2) + 6, 20)
+    graphics.set_pen(theme["bad_text"] if down else BLACK)
+    graphics.text(text, x, y, WIDTH, 2)
+
+
+def draw_dot(x, y, r, status, theme):
+    # Black outline so a light colour (yellow) still shows up on white
+    graphics.set_pen(BLACK)
+    graphics.circle(x, y, r + 1)
+    if status in DOWN_STATUSES:
+        graphics.set_pen(theme["bad"])
+    elif status == "UP":
+        graphics.set_pen(theme["good"])
+    else:
+        graphics.set_pen(WHITE)
     graphics.circle(x, y, r)
 
 
-def draw_header(up, total):
+def draw_header(up, total, theme):
     graphics.set_pen(BLACK)
     graphics.text("Uptime", 10, 8, WIDTH, 3)
     if updated_at is not None:
@@ -175,23 +249,21 @@ def draw_header(up, total):
         right = ""
     if error:
         right = error + ("  (as of %s)" % right.split("  ")[-1] if right else "")
-        graphics.set_pen(RED)
-    graphics.text(right, WIDTH - 10 - graphics.measure_text(right, 2), 14, WIDTH, 2)
+    status_text(right, WIDTH - 10 - graphics.measure_text(right, 2), 14, bool(error), theme)
     graphics.set_pen(BLACK)
     graphics.line(0, HEADER_H, WIDTH, HEADER_H)
 
 
-def draw_row(m, y, row_h, window_start, now, grey):
+def draw_row(m, y, row_h, window_start, now, grey, theme):
     mid = y + row_h // 2
     text_y = mid - 8
     down = m["status"] in DOWN_STATUSES
 
-    draw_dot(14, mid, 6, m["status"])
+    draw_dot(14, mid, 6, m["status"], theme)
 
     # Name
     name_x, bar_x, pct_w = 28, 350, 90
-    graphics.set_pen(RED if down else BLACK)
-    graphics.text(fit_text(m["name"], bar_x - name_x - 10, 2), name_x, text_y, WIDTH, 2)
+    status_text(fit_text(m["name"], bar_x - name_x - 10, 2), name_x, text_y, down, theme)
 
     # 24 hour bar: one segment per clock hour, oldest on the left, the last being the
     # current (partial) hour. Aligning to clock hours keeps a short incident in one segment.
@@ -206,11 +278,17 @@ def draw_row(m, y, row_h, window_start, now, grey):
         x0 = bar_x + h * bar_w // WINDOW_HOURS
         x1 = bar_x + (h + 1) * bar_w // WINDOW_HOURS - 2
         if overlap(m["down"], seg_start, seg_end) > 0:
-            graphics.set_pen(RED)
+            if theme["outline"]:
+                graphics.set_pen(BLACK)
+                graphics.rectangle(x0, bar_y, x1 - x0, bar_h)
+                graphics.set_pen(theme["bad"])
+                graphics.rectangle(x0 + 1, bar_y + 1, x1 - x0 - 2, bar_h - 2)
+                continue
+            graphics.set_pen(theme["bad"])
         elif overlap(paused, seg_start, seg_end) > 0:
             graphics.set_pen(grey)
         else:
-            graphics.set_pen(GREEN)
+            graphics.set_pen(theme["good"])
         graphics.rectangle(x0, bar_y, x1 - x0, bar_h)
 
     # Uptime over the window, ignoring time spent paused
@@ -220,11 +298,10 @@ def draw_row(m, y, row_h, window_start, now, grey):
         text = "%.2f%%" % pct
     else:
         text = "paused"
-    graphics.set_pen(RED if down else BLACK)
-    graphics.text(text, WIDTH - 8 - graphics.measure_text(text, 2), text_y, WIDTH, 2)
+    status_text(text, WIDTH - 8 - graphics.measure_text(text, 2), text_y, down, theme)
 
 
-def draw_alerts(alerts, y):
+def draw_alerts(alerts, y, theme):
     graphics.set_pen(BLACK)
     graphics.line(0, y, WIDTH, y)
     text_y = y + (ALERT_H - 16) // 2
@@ -232,15 +309,14 @@ def draw_alerts(alerts, y):
     x = 8 + graphics.measure_text("Alerts:", 2) + 14
     for m in alerts:
         down = m["status"] in DOWN_STATUSES
-        draw_dot(x + 6, y + ALERT_H // 2, 6, m["status"])
         name = m["name"]
         name_w = graphics.measure_text(name, 2)
         if x + 18 + name_w > WIDTH - 8:
             graphics.set_pen(BLACK)
             graphics.text("..", x, text_y, WIDTH, 2)
             break
-        graphics.set_pen(RED if down else BLACK)
-        graphics.text(name, x + 18, text_y, WIDTH, 2)
+        draw_dot(x + 6, y + ALERT_H // 2, 6, m["status"], theme)
+        status_text(name, x + 18, text_y, down, theme)
         x += 18 + name_w + 20
 
 
@@ -253,6 +329,7 @@ def draw_message(lines):
 
 
 def draw():
+    theme = THEMES[theme_name]
     graphics.set_font("bitmap8")
     graphics.set_pen(WHITE)
     graphics.clear()
@@ -266,7 +343,7 @@ def draw():
         alerts = [m for m in monitors if not m["full"]]
         up = sum(1 for m in monitors if m["status"] == "UP")
         active = sum(1 for m in monitors if m["status"] != "PAUSED")
-        draw_header(up, active)
+        draw_header(up, active, theme)
 
         alert_y = HEIGHT - FOOTER_H - (ALERT_H if alerts else 0)
         rows_top = HEADER_H + 4
@@ -274,12 +351,13 @@ def draw():
             row_h = min(40, (alert_y - rows_top - 4) // len(full))
             grey = graphics.create_pen(180, 180, 180)
             for i, m in enumerate(full):
-                draw_row(m, rows_top + i * row_h, row_h, window_start, now, grey)
+                draw_row(m, rows_top + i * row_h, row_h, window_start, now, grey, theme)
         if alerts:
-            draw_alerts(alerts, alert_y)
+            draw_alerts(alerts, alert_y, theme)
 
     graphics.set_pen(BLACK)
     graphics.line(0, HEIGHT - FOOTER_H, WIDTH, HEIGHT - FOOTER_H)
-    ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, FOOTER_H)
+    ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, FOOTER_H,
+                          "C: Colours      Hold A + E: Launcher")
 
     graphics.update()
