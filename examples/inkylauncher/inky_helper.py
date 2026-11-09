@@ -5,7 +5,7 @@ import time
 
 import inky_frame
 import network
-from machine import PWM, Pin, Timer
+from machine import PWM, Pin, Timer, reset
 from pcf85063a import PCF85063A
 from pimoroni_i2c import PimoroniI2C
 
@@ -71,11 +71,58 @@ def sleep(t):
     # this allows the device to go into sleep mode when on battery power.
     hold_vsys_en_pin.init(Pin.IN)
 
-    # Regular time.sleep for those powering from USB
-    time.sleep(60 * t)
+    # On USB power we're still running, so wait out the interval here, watching for
+    # A + E being held to return to the launcher. (On battery, pressing A + E wakes
+    # the board and main.py's startup check opens the launcher.)
+    wait_for_launcher_hold(60 * t)
 
 
-LAUNCHER_HINT = "Hold A + E, then press Reset, to return to the Launcher"
+LAUNCHER_HOLD_MS = 1000
+LAUNCHER_GRACE_MS = 1000
+
+
+# Checked at startup: were A and E both pressed? Button.raw() first reports whether the
+# button was held when the board powered on (how a press wakes it on battery), then its
+# live state. The board latches only the buttons down at the instant it powers on, so if
+# A and E weren't pressed at exactly the same moment, give the other a short grace period.
+def launcher_requested():
+    a_seen = inky_frame.button_a.raw()
+    e_seen = inky_frame.button_e.raw()
+    if a_seen and e_seen:
+        return True
+    if not (a_seen or e_seen):
+        return False
+    deadline = time.ticks_add(time.ticks_ms(), LAUNCHER_GRACE_MS)
+    while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        a_seen = a_seen or inky_frame.button_a.raw()
+        e_seen = e_seen or inky_frame.button_e.raw()
+        if a_seen and e_seen:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def wait_for_launcher_hold(seconds):
+    deadline = time.ticks_add(time.ticks_ms(), int(seconds * 1000))
+    held_since = None
+    while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        if inky_frame.button_a.raw() and inky_frame.button_e.raw():
+            if held_since is None:
+                held_since = time.ticks_ms()
+                inky_frame.button_a.led_on()
+                inky_frame.button_e.led_on()
+            elif time.ticks_diff(time.ticks_ms(), held_since) >= LAUNCHER_HOLD_MS:
+                # With no saved app, main.py shows the launcher after the reset
+                clear_state()
+                reset()
+        elif held_since is not None:
+            held_since = None
+            inky_frame.button_a.led_off()
+            inky_frame.button_e.led_off()
+        time.sleep(0.05)
+
+
+LAUNCHER_HINT = "Hold A + E to return to the Launcher"
 
 
 # Draws the "return to launcher" button reference in a bar along the bottom of the screen.

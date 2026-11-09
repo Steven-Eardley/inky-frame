@@ -83,7 +83,7 @@ def launcher():
     graphics.rectangle(WIDTH - 300, HEIGHT - (100 + y_offset), 270, 50)
 
     graphics.set_pen(BLACK)
-    note = "Hold A + E, then press Reset, to return to the Launcher"
+    note = "Hold A + E to return to the Launcher"
     note_len = graphics.measure_text(note, 2) // 2
     graphics.text(note, (WIDTH // 2 - note_len), HEIGHT - 30, 600, 2)
 
@@ -129,7 +129,7 @@ def launcher():
 ih.clear_button_leds()
 ih.led_warn.off()
 
-if ih.inky_frame.button_a.read() and ih.inky_frame.button_e.read():
+if ih.launcher_requested():
     launcher()
 
 ih.clear_button_leds()
