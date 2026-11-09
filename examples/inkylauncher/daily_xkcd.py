@@ -7,7 +7,7 @@ import jpegdec
 import machine
 import sdcard
 import uos
-from inky_frame import WHITE
+from inky_frame import BLACK, WHITE
 
 """
 xkcd daily
@@ -90,5 +90,12 @@ def draw():
 
     jpeg.open_file(FILENAME)
     jpeg.decode()
+
+    # Launcher hint along the bottom, stopping short of the QR code / "xkcd.com"
+    # label in the bottom-right corner of the image.
+    footer_w = WIDTH - 80
+    ih.draw_launcher_hint(graphics, footer_w, HEIGHT, BLACK, WHITE, 22)
+    graphics.set_pen(BLACK)
+    graphics.line(0, HEIGHT - 22, footer_w, HEIGHT - 22)
 
     graphics.update()

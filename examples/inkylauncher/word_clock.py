@@ -1,6 +1,7 @@
+import inky_helper as ih
 import machine
 import ntptime
-from inky_frame import RED, WHITE
+from inky_frame import BLACK, RED, WHITE
 
 # Length of time between updates in minutes.
 UPDATE_INTERVAL = 15
@@ -96,5 +97,10 @@ def draw():
 
             graphics.text(letter.upper(), x, y, 640, scale=scale, spacing=spacing)
             x += letter_space
+
+    # Launcher hint along the bottom, below a separator line
+    graphics.set_pen(BLACK)
+    graphics.line(0, HEIGHT - 22, WIDTH, HEIGHT - 22)
+    ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, 22)
 
     graphics.update()

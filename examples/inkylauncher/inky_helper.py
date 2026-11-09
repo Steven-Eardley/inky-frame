@@ -75,6 +75,22 @@ def sleep(t):
     time.sleep(60 * t)
 
 
+LAUNCHER_HINT = "Hold A + E, then press Reset, to return to the Launcher"
+
+
+# Draws the "return to launcher" button reference in a bar along the bottom of the screen.
+# Pass bg=None to draw the text without a background bar.
+def draw_launcher_hint(graphics, width, height, fg, bg=None, bar_height=20):
+    if bg is not None:
+        graphics.set_pen(bg)
+        graphics.rectangle(0, height - bar_height, width, bar_height)
+    graphics.set_pen(fg)
+    graphics.set_font("bitmap8")
+    text_w = graphics.measure_text(LAUNCHER_HINT, 2)
+    # bitmap8 at scale 2 is 16px tall; centre it vertically in the bar
+    graphics.text(LAUNCHER_HINT, (width - text_w) // 2, height - bar_height + (bar_height - 16) // 2, width, 2)
+
+
 # Turns off the button LEDs
 def clear_button_leds():
     inky_frame.button_a.led_off()

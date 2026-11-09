@@ -32,9 +32,11 @@ except ImportError:
 
 URL = "https://api.carbonintensity.org.uk/regional/postcode/" + str(POSTCODE)
 
+
+# Height of the launcher hint footer; the chart is drawn above it
+FOOTER_H = 22
 # Top of the chart's 100%-of-scale line, below the header text (and room for a % label above a full bar)
 CHART_TOP = 88
-
 
 region = None  # stays None until we've had a successful update
 
@@ -69,9 +71,16 @@ def update():
         print("Carbon Intensity update failed:", e)
 
 
+def draw_footer():
+    graphics.set_pen(BLACK)
+    graphics.line(0, HEIGHT - FOOTER_H, WIDTH, HEIGHT - FOOTER_H)
+    ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, FOOTER_H)
+
+
 def draw():
     # we're setting up our PicoGraphics buffer after we've made our RAM intensive https request
-    w, h = WIDTH, HEIGHT
+    # The chart uses the area above the footer
+    w, h = WIDTH, HEIGHT - FOOTER_H
     graphics.set_pen(WHITE)
     graphics.clear()
 
@@ -82,6 +91,7 @@ def draw():
         graphics.set_pen(WHITE)
         graphics.text("Unable to get Carbon Intensity data!", 5, (HEIGHT // 2) - 15, WIDTH, 2)
         graphics.text("Check your network settings in secrets.py", 5, (HEIGHT // 2) + 2, WIDTH, 2)
+        draw_footer()
         graphics.update()
         return
 
@@ -176,5 +186,7 @@ def draw():
     graphics.text(f"Region: {region}", int((w / 2) + 30), 10, scale=2)
     graphics.text(f"{forecast} gCO2/kWh ({index})", int((w / 2) + 30), 30, scale=2)
     graphics.text(f"{datetime_from[0]} {datetime_from[1]} to {datetime_to[1]}", int((w / 2) + 30), 50, scale=2)
+
+    draw_footer()
 
     graphics.update()

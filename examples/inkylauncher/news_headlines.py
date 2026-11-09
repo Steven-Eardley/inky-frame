@@ -148,7 +148,7 @@ def draw():
         # Title
         graphics.set_pen(graphics.create_pen(200, 0, 0))
         graphics.rectangle(0, 0, WIDTH, 40)
-        graphics.set_pen(BLACK)
+        graphics.set_pen(WHITE)
         graphics.text("Headlines from BBC News:", 10, 10, WIDTH, 3)
 
         graphics.set_pen(RED)
@@ -166,14 +166,18 @@ def draw():
         code.set_text(feed[1]["guid"])
         draw_qr_code(10, 265, 100, code)
 
-        graphics.set_pen(graphics.create_pen(200, 0, 0))
-        graphics.rectangle(0, HEIGHT - 20, WIDTH, 20)
+        # 22px footer with a separator line, matching the other apps
+        ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, WHITE, graphics.create_pen(200, 0, 0), 22)
+        graphics.set_pen(BLACK)
+        graphics.line(0, HEIGHT - 22, WIDTH, HEIGHT - 22)
 
     else:
         graphics.set_pen(RED)
         graphics.rectangle(0, (HEIGHT // 2) - 20, WIDTH, 40)
-        graphics.set_pen(BLACK)
+        graphics.set_pen(WHITE)
         graphics.text("Unable to display news feed!", 5, (HEIGHT // 2) - 15, WIDTH, 2)
         graphics.text("Check your network settings in secrets.py", 5, (HEIGHT // 2) + 2, WIDTH, 2)
+        ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, 22)
+        graphics.line(0, HEIGHT - 22, WIDTH, HEIGHT - 22)
 
     graphics.update()

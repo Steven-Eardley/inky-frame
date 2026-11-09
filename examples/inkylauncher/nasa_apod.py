@@ -103,10 +103,13 @@ def draw():
         graphics.text("Unable to display image!", 5, (HEIGHT // 2) - 15, WIDTH, 2)
         graphics.text("Check your network settings in secrets.py", 5, (HEIGHT // 2) + 2, WIDTH, 2)
 
+    # Two-line footer: image title, then a separator and the launcher hint
     graphics.set_pen(WHITE)
-    graphics.rectangle(0, HEIGHT - 25, WIDTH, 25)
+    graphics.rectangle(0, HEIGHT - 45, WIDTH, 45)
     graphics.set_pen(BLACK)
-    graphics.text(apod_title, 5, HEIGHT - 20, WIDTH, 2)
+    graphics.text(apod_title, 5, HEIGHT - 41, WIDTH, 2)
+    graphics.line(0, HEIGHT - 22, WIDTH, HEIGHT - 22)
+    ih.draw_launcher_hint(graphics, WIDTH, HEIGHT, BLACK, None, 22)
 
     gc.collect()
 
