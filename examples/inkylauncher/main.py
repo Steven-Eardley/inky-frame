@@ -26,6 +26,9 @@ graphics = PicoGraphics(DISPLAY)
 WIDTH, HEIGHT = graphics.get_bounds()
 graphics.set_font("bitmap8")
 
+# Measure the supply voltage now, before WiFi starts (they share a pin)
+ih.read_vsys()
+
 
 # Launcher entries: (label, app module, buttons that select it)
 APPS = [
@@ -106,6 +109,7 @@ def launcher():
     note = "Hold A + E to return to the Launcher"
     note_len = graphics.measure_text(note, 2) // 2
     graphics.text(note, (WIDTH // 2 - note_len), HEIGHT - 30, 600, 2)
+    ih.draw_battery(graphics, WIDTH, HEIGHT - 30, BLACK)
 
     ih.led_warn.on()
     graphics.update()

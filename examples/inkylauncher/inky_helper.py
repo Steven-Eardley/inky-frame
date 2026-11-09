@@ -5,7 +5,7 @@ import time
 
 import inky_frame
 import network
-from machine import PWM, Pin, Timer, reset
+from machine import ADC, PWM, Pin, Timer, reset
 from pcf85063a import PCF85063A
 from pimoroni_i2c import PimoroniI2C
 
@@ -146,6 +146,93 @@ def draw_launcher_hint(graphics, width, height, fg, bg=None, bar_height=20, text
     text_w = graphics.measure_text(text, 2)
     # bitmap8 at scale 2 is 16px tall; centre it vertically in the bar
     graphics.text(text, (width - text_w) // 2, height - bar_height + (bar_height - 16) // 2, width, 2)
+    draw_battery(graphics, width, height - bar_height + (bar_height - 16) // 2, fg)
+
+
+# Battery monitoring. Thresholds are for 3 x AA alkaline cells; for NiMH rechargeables
+# use full 4.2, and for a single-cell LiPo use full 4.2, low 3.6, empty 3.4.
+BATTERY_FULL_V = 4.5
+BATTERY_LOW_V = 3.6
+BATTERY_EMPTY_V = 3.3
+
+vsys_voltage = None  # set by read_vsys() at startup
+on_usb = None  # set by check_usb() once WiFi is active; None if unknown
+
+
+def read_vsys():
+    # VSYS is on GPIO29 through a 1/3 divider, but on the Pico (2) W that pin is shared with
+    # the WiFi chip, so this must be called before WiFi starts. Let ADC() configure the pin:
+    # making it a digital input first trips RP2350 erratum E9 and reads ~1.5V high.
+    global vsys_voltage
+    try:
+        Pin(25, Pin.OUT, value=1)  # deselect the WiFi chip
+        adc = ADC(Pin(29))
+        time.sleep_ms(10)
+        total = 0
+        for _ in range(16):
+            total += adc.read_u16()
+            time.sleep_ms(1)
+        vsys_voltage = total / 16 * 3.3 / 65535 * 3
+    except Exception as e:
+        print("Unable to read VSYS:", e)
+
+
+def check_usb():
+    # USB VBUS sense is on the WiFi chip's GPIO 2, so WiFi must be active
+    global on_usb
+    try:
+        on_usb = bool(Pin("WL_GPIO2", Pin.IN).value())
+    except Exception as e:
+        print("Unable to check USB power:", e)
+
+
+def on_battery():
+    if vsys_voltage is None:
+        return False
+    if on_usb is not None:
+        return not on_usb
+    # Not known yet (e.g. on the launcher, before WiFi): USB gives about 4.65V
+    return vsys_voltage < 4.6
+
+
+# Draws the supply voltage at the right-hand end of a line of text at text_y, with a
+# battery icon (filled in proportion to the charge) on battery, or a plug icon on USB.
+# Below BATTERY_LOW_V it also says "LOW".
+def draw_battery(graphics, width, text_y, fg):
+    if vsys_voltage is None:
+        return
+    v = vsys_voltage
+    battery = on_battery()
+    low = battery and v < BATTERY_LOW_V
+    label = ("LOW %.2fV" if low else "%.2fV") % v
+    graphics.set_font("bitmap8")
+    label_w = graphics.measure_text(label, 2)
+    x = width - 8 - label_w
+    graphics.set_pen(fg)
+    graphics.text(label, x, text_y, width, 2)
+
+    if battery:
+        # 24x12 body with a nub, filled in proportion to the charge
+        body_w, body_h = 24, 12
+        ix = x - 8 - body_w - 3
+        iy = text_y + 2
+        graphics.rectangle(ix, iy, body_w, body_h)
+        graphics.rectangle(ix + body_w, iy + 3, 3, body_h - 6)
+        graphics.set_pen(1)  # WHITE
+        graphics.rectangle(ix + 1, iy + 1, body_w - 2, body_h - 2)
+        frac = (v - BATTERY_EMPTY_V) / (BATTERY_FULL_V - BATTERY_EMPTY_V)
+        fill = int((body_w - 4) * max(0.0, min(1.0, frac)))
+        if fill > 0:
+            graphics.set_pen(fg)
+            graphics.rectangle(ix + 2, iy + 2, fill, body_h - 4)
+    else:
+        # Plug: a cable, the plug body, and two prongs
+        ix = x - 8 - 26
+        mid = text_y + 8
+        graphics.rectangle(ix, mid - 1, 8, 2)
+        graphics.rectangle(ix + 8, mid - 5, 10, 10)
+        graphics.rectangle(ix + 18, mid - 4, 6, 2)
+        graphics.rectangle(ix + 18, mid + 2, 6, 2)
 
 
 # Turns off the button LEDs
@@ -175,6 +262,7 @@ def network_connect(SSID, PSK):
     # Enable the Wireless
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    check_usb()
 
     # Sets the Wireless LED pulsing and attempts to connect to your local network.
     pulse_network_led()
