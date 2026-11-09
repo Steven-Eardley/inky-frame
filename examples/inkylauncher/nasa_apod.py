@@ -1,6 +1,7 @@
 import gc
 from urllib import urequest
 
+import inky_helper as ih
 import jpegdec
 from inky_frame import BLACK, RED, WHITE
 from ujson import load
@@ -34,6 +35,12 @@ def show_error(text):
 def update():
     global apod_title
 
+    # Without a connection urlopen can block forever; keep the last saved image instead.
+    if not ih.is_connected():
+        print("No network connection, skipping download")
+        apod_title = "Offline - showing last downloaded image"
+        return
+
     if HEIGHT == 448:
         # Image for Inky Frame 5.7
         IMG_URL = "https://pimoroni.github.io/feed2image/nasa-apod-daily.jpg"
@@ -50,9 +57,12 @@ def update():
         gc.collect()
         j = load(socket)
         socket.close()
-        apod_title = j["title"]
+        # The API returns an error object (no "title") when it's down or rate limited
+        apod_title = j.get("title") or "Image Title Unavailable"
+        if "title" not in j:
+            print("APOD API error:", j)
         gc.collect()
-    except OSError as e:
+    except Exception as e:  # network errors, bad JSON, etc. - the image is fetched separately
         print(e)
         apod_title = "Image Title Unavailable"
 
