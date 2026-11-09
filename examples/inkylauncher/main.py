@@ -27,18 +27,53 @@ WIDTH, HEIGHT = graphics.get_bounds()
 graphics.set_font("bitmap8")
 
 
+# Launcher entries: (label, app module, buttons that select it)
+APPS = [
+    ("A. NASA Picture of the Day", "nasa_apod", ("a",)),
+    ("B. Word Clock", "word_clock", ("b",)),
+    ("C. Daily XKCD", "daily_xkcd", ("c",)),
+    ("D. Headlines", "news_headlines", ("d",)),
+    ("E. Carbon Intensity", "carbon_intensity", ("e",)),
+    ("F. Uptime (A + B)", "uptime_monitor", ("a", "b")),
+]
+
+# How long to wait after the first button press for a second one (for A + B)
+COMBO_GRACE_MS = 300
+
+
+def wait_for_choice():
+    buttons = {
+        "a": ih.inky_frame.button_a,
+        "b": ih.inky_frame.button_b,
+        "c": ih.inky_frame.button_c,
+        "d": ih.inky_frame.button_d,
+        "e": ih.inky_frame.button_e,
+    }
+    while True:
+        # Wait for any button
+        pressed = set(k for k, b in buttons.items() if b.raw())
+        if not pressed:
+            time.sleep(0.02)
+            continue
+
+        # Give a second button a moment to join, for combinations like A + B
+        deadline = time.ticks_add(time.ticks_ms(), COMBO_GRACE_MS)
+        while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+            pressed.update(k for k, b in buttons.items() if b.raw())
+            time.sleep(0.02)
+
+        for label, app, combo in APPS:
+            if pressed == set(combo):
+                for k in combo:
+                    buttons[k].led_on()
+                return app
+
+        # Unrecognised combination: wait for release and start again
+        while any(b.raw() for b in buttons.values()):
+            time.sleep(0.02)
+
+
 def launcher():
-
-    # Apply an offset for the Inky Frame 5.7".
-    if HEIGHT == 448:
-        y_offset = 20
-    # Inky Frame 7.3"
-    elif HEIGHT == 480:
-        y_offset = 35
-    # Inky Frame 4"
-    else:
-        y_offset = 0
-
     # Draws the menu
     graphics.set_pen(WHITE)
     graphics.clear()
@@ -50,37 +85,22 @@ def launcher():
     title_len = graphics.measure_text(title, 4) // 2
     graphics.text(title, (WIDTH // 2 - title_len), 10, WIDTH, 4)
 
-    graphics.set_pen(GREEN)
-    graphics.rectangle(30, HEIGHT - (340 + y_offset), WIDTH - 100, 50)
-    graphics.set_pen(1)
-    graphics.text("A. NASA Picture of the Day", 35, HEIGHT - (325 + y_offset), 600, 3)
-
-    graphics.set_pen(BLUE)
-    graphics.rectangle(30, HEIGHT - (280 + y_offset), WIDTH - 150, 50)
-    graphics.set_pen(1)
-    graphics.text("B. Word Clock", 35, HEIGHT - (265 + y_offset), 600, 3)
-
-    graphics.set_pen(GREEN)
-    graphics.rectangle(30, HEIGHT - (220 + y_offset), WIDTH - 200, 50)
-    graphics.set_pen(1)
-    graphics.text("C. Daily XKCD", 35, HEIGHT - (205 + y_offset), 600, 3)
-
-    graphics.set_pen(BLUE)
-    graphics.rectangle(30, HEIGHT - (160 + y_offset), WIDTH - 250, 50)
-    graphics.set_pen(1)
-    graphics.text("D. Headlines", 35, HEIGHT - (145 + y_offset), 600, 3)
-
-    graphics.set_pen(GREEN)
-    graphics.rectangle(30, HEIGHT - (100 + y_offset), WIDTH - 300, 50)
-    graphics.set_pen(1)
-    graphics.text("E. Carbon Intensity", 35, HEIGHT - (85 + y_offset), 600, 3)
-
-    graphics.set_pen(graphics.create_pen(220, 220, 220))
-    graphics.rectangle(WIDTH - 100, HEIGHT - (340 + y_offset), 70, 50)
-    graphics.rectangle(WIDTH - 150, HEIGHT - (280 + y_offset), 120, 50)
-    graphics.rectangle(WIDTH - 200, HEIGHT - (220 + y_offset), 170, 50)
-    graphics.rectangle(WIDTH - 250, HEIGHT - (160 + y_offset), 220, 50)
-    graphics.rectangle(WIDTH - 300, HEIGHT - (100 + y_offset), 270, 50)
+    # Fit the entries between the title bar and the note at the bottom, centred in the space
+    title_h, note_y = 50, HEIGHT - 30
+    space = note_y - title_h
+    step = min(60, (space - 10) // len(APPS))
+    row_h = step - 10
+    top = title_h + (space - (len(APPS) * step - 10)) // 2
+    grey = graphics.create_pen(220, 220, 220)
+    for i, (label, app, combo) in enumerate(APPS):
+        y = top + i * step
+        bar_w = WIDTH - (100 + 50 * i)
+        graphics.set_pen(GREEN if i % 2 == 0 else BLUE)
+        graphics.rectangle(30, y, bar_w, row_h)
+        graphics.set_pen(grey)
+        graphics.rectangle(bar_w, y, WIDTH - 30 - bar_w, row_h)
+        graphics.set_pen(WHITE)
+        graphics.text(label, 35, y + (row_h - 24) // 2, 600, 3)
 
     graphics.set_pen(BLACK)
     note = "Hold A + E to return to the Launcher"
@@ -93,36 +113,11 @@ def launcher():
 
     # Now we've drawn the menu to the screen, we wait here for the user to select an app.
     # Then once an app is selected, we set that as the current app and reset the device and load into it.
-
-    # You can replace any of the included examples with one of your own,
-    # just replace the name of the app in the line "ih.update_last_app("nasa_apod")"
-
-    while True:
-        if ih.inky_frame.button_a.read():
-            ih.inky_frame.button_a.led_on()
-            ih.update_state("nasa_apod")
-            time.sleep(0.5)
-            reset()
-        if ih.inky_frame.button_b.read():
-            ih.inky_frame.button_b.led_on()
-            ih.update_state("word_clock")
-            time.sleep(0.5)
-            reset()
-        if ih.inky_frame.button_c.read():
-            ih.inky_frame.button_c.led_on()
-            ih.update_state("daily_xkcd")
-            time.sleep(0.5)
-            reset()
-        if ih.inky_frame.button_d.read():
-            ih.inky_frame.button_d.led_on()
-            ih.update_state("news_headlines")
-            time.sleep(0.5)
-            reset()
-        if ih.inky_frame.button_e.read():
-            ih.inky_frame.button_e.led_on()
-            ih.update_state("carbon_intensity")
-            time.sleep(0.5)
-            reset()
+    # To add or replace an app, edit the APPS list above.
+    app = wait_for_choice()
+    ih.update_state(app)
+    time.sleep(0.5)
+    reset()
 
 
 # Turn any LEDs off that may still be on from last run.
