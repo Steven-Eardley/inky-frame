@@ -7,7 +7,7 @@ import jpegdec
 import machine
 import sdcard
 import uos
-from inky_frame import BLACK, WHITE
+from inky_frame import BLACK, RED, WHITE
 
 """
 xkcd daily
@@ -42,19 +42,23 @@ def mount_sd(attempts=3):
             sd_spi = machine.SPI(0, sck=machine.Pin(18, machine.Pin.OUT), mosi=machine.Pin(19, machine.Pin.OUT), miso=machine.Pin(16, machine.Pin.OUT))
             sd = sdcard.SDCard(sd_spi, machine.Pin(22))
             uos.mount(sd, "/sd")
-            return
+            return True
         except OSError as e:
             print("SD mount attempt %d failed: %r" % (attempt + 1, e))
-            if attempt == attempts - 1:
-                raise
             time.sleep(0.5)
+    return False
 
 
-mount_sd()
+# Don't raise if the card won't mount: the app still needs to run so it can
+# show the problem, and so holding A + E can get back to the launcher.
+sd_mounted = mount_sd()
 gc.collect()  # Claw back some RAM!
 
 
 def update():
+    if not sd_mounted:
+        return
+
     # Without a connection urlopen can block forever; keep the last saved comic instead.
     if not ih.is_connected():
         print("No network connection, skipping download")
@@ -83,13 +87,19 @@ def draw():
 
     gc.collect()  # For good measure...
 
-    jpeg = jpegdec.JPEG(graphics)
-
     graphics.set_pen(WHITE)
     graphics.clear()
 
-    jpeg.open_file(FILENAME)
-    jpeg.decode()
+    if sd_mounted:
+        jpeg = jpegdec.JPEG(graphics)
+        jpeg.open_file(FILENAME)
+        jpeg.decode()
+    else:
+        graphics.set_pen(RED)
+        graphics.rectangle(0, (HEIGHT // 2) - 20, WIDTH, 40)
+        graphics.set_pen(WHITE)
+        graphics.text("Unable to read the SD card!", 5, (HEIGHT // 2) - 15, WIDTH, 2)
+        graphics.text("Check it's inserted, then reset.", 5, (HEIGHT // 2) + 2, WIDTH, 2)
 
     # Launcher hint along the bottom, stopping short of the QR code / "xkcd.com"
     # label in the bottom-right corner of the image.
