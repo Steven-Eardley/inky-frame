@@ -249,7 +249,11 @@ def draw_header(up, total, theme):
         right = ""
     if error:
         right = error + ("  (as of %s)" % right.split("  ")[-1] if right else "")
-    status_text(right, WIDTH - 10 - graphics.measure_text(right, 2), 14, bool(error), theme)
+    right_x = WIDTH - 10 - graphics.measure_text(right, 2)
+    status_text(right, right_x, 14, bool(error), theme)
+    # Overall status dot, like the ones before each monitor: good if all active monitors are up
+    if right and not error:
+        draw_dot(right_x - 14, 21, 6, "UP" if up == total else "DOWN", theme)
     graphics.set_pen(BLACK)
     graphics.line(0, HEADER_H, WIDTH, HEADER_H)
 
